@@ -1,0 +1,680 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mapa de Productos - Ghia</title>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700&family=Inter:wght@300;400;600&display=swap');
+        
+        body {
+            margin: 0;
+            padding: 0;
+            background: linear-gradient(135deg, #faf8f5 0%, #f5f0e8 100%);
+            font-family: 'Inter', sans-serif;
+            overflow: hidden;
+        }
+        
+        #container {
+            width: 100vw;
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        
+        .title {
+            position: absolute;
+            top: 30px;
+            left: 40px;
+            font-family: 'Playfair Display', serif;
+            font-size: 2.5rem;
+            color: #2c3e50;
+            font-weight: 700;
+            letter-spacing: -1px;
+            z-index: 10;
+        }
+        
+        .subtitle {
+            position: absolute;
+            top: 80px;
+            left: 40px;
+            font-size: 0.9rem;
+            color: #7f8c8d;
+            font-weight: 300;
+            z-index: 10;
+        }
+        
+        .back-button {
+            position: absolute;
+            top: 30px;
+            right: 40px;
+            padding: 12px 24px;
+            background: #2c3e50;
+            color: white;
+            border: none;
+            border-radius: 25px;
+            font-family: 'Inter', sans-serif;
+            font-size: 0.9rem;
+            cursor: pointer;
+            opacity: 0;
+            pointer-events: none;
+            transition: all 0.3s ease;
+            z-index: 100;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+        }
+        
+        .back-button:hover {
+            background: #34495e;
+            transform: translateY(-2px);
+        }
+        
+        .back-button.visible {
+            opacity: 1;
+            pointer-events: all;
+        }
+        
+        .node circle {
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        
+        .node:hover circle {
+            filter: brightness(1.1);
+        }
+        
+        .node text {
+            font-family: 'Inter', sans-serif;
+            pointer-events: none;
+            text-anchor: middle;
+            dominant-baseline: middle;
+        }
+        
+        .link {
+            fill: none;
+            stroke: #d4a574;
+            stroke-width: 2px;
+            opacity: 0.6;
+            transition: opacity 0.5s ease;
+        }
+        
+        .center-text {
+            font-family: 'Playfair Display', serif;
+            font-weight: 700;
+            fill: white;
+            font-size: 14px;
+        }
+        
+        .category-text {
+            font-weight: 600;
+            fill: white;
+            font-size: 10px;
+        }
+        
+        .product-text {
+            fill: white;
+            font-size: 8px;
+            font-weight: 400;
+        }
+        
+        .tooltip {
+            position: absolute;
+            padding: 12px 16px;
+            background: rgba(44, 62, 80, 0.95);
+            color: white;
+            border-radius: 8px;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.3s;
+            font-size: 0.85rem;
+            max-width: 220px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+            z-index: 1000;
+        }
+        
+        .legend {
+            position: absolute;
+            bottom: 30px;
+            right: 40px;
+            background: rgba(255,255,255,0.9);
+            padding: 20px;
+            border-radius: 12px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+            max-height: 300px;
+            overflow-y: auto;
+            transition: opacity 0.5s ease;
+        }
+        
+        .legend.hidden {
+            opacity: 0;
+            pointer-events: none;
+        }
+        
+        .legend-item {
+            display: flex;
+            align-items: center;
+            margin-bottom: 8px;
+            font-size: 0.85rem;
+            color: #2c3e50;
+        }
+        
+        .legend-color {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            margin-right: 10px;
+        }
+    </style>
+<base target="_blank">
+</head>
+<body>
+    <div class="title">Mapa de Productos</div>
+    <div class="subtitle">Ghia • Bebidas Sin Alcohol & Lifestyle</div>
+    <button class="back-button" id="backButton" onclick="resetZoom()">← Volver al mapa</button>
+    <div id="container"></div>
+    <div class="tooltip" id="tooltip"></div>
+    
+    <div class="legend" id="legend">
+        <div class="legend-item">
+            <div class="legend-color" style="background: #8B4513;"></div>
+            <span>Apéritifs</span>
+        </div>
+        <div class="legend-item">
+            <div class="legend-color" style="background: #D2691E;"></div>
+            <span>Le Spritz</span>
+        </div>
+        <div class="legend-item">
+            <div class="legend-color" style="background: #FF6B35;"></div>
+            <span>Le Fizz</span>
+        </div>
+        <div class="legend-item">
+            <div class="legend-color" style="background: #CD853F;"></div>
+            <span>Bundles</span>
+        </div>
+        <div class="legend-item">
+            <div class="legend-color" style="background: #2c3e50;"></div>
+            <span>Objetos & Merch</span>
+        </div>
+    </div>
+
+    <script>
+        // Datos completos de productos Ghia
+        const data = {
+            name: "GHIA",
+            type: "center",
+            description: "Bebidas botánicas sin alcohol & Lifestyle",
+            children: [
+                {
+                    name: "APERITIFS",
+                    type: "category",
+                    color: "#8B4513",
+                    description: "Concentrados 500ml",
+                    children: [
+                        { name: "Original", type: "product", description: "Aperitif original con yuzu y notas florales" },
+                        { name: "Berry", type: "product", description: "Aperitif con perfil frutal de bayas" }
+                    ]
+                },
+                {
+                    name: "LE SPRITZ",
+                    type: "category",
+                    color: "#D2691E",
+                    description: "Latas listas para beber 8oz",
+                    children: [
+                        { name: "Blood Orange", type: "product", description: "Naranja sanguina" },
+                        { name: "Lime & Salt", type: "product", description: "Lima y sal marina" },
+                        { name: "Ghia Ginger", type: "product", description: "Jengibre y miel" },
+                        { name: "Ghia Soda", type: "product", description: "Original con soda" },
+                        { name: "Sumac & Chili", type: "product", description: "Sumac y chile picante" }
+                    ]
+                },
+                {
+                    name: "LE FIZZ",
+                    type: "category",
+                    color: "#FF6B35",
+                    description: "Bebidas gaseosas",
+                    children: [
+                        { name: "Le Fizz", type: "product", description: "Bebida gaseosa signature" }
+                    ]
+                },
+                {
+                    name: "BUNDLES",
+                    type: "category",
+                    color: "#CD853F",
+                    description: "Sets y paquetes especiales",
+                    children: [
+                        { name: "Discovery Set", type: "product", description: "Set de descubrimiento" },
+                        { name: "Greatest Sips Kit", type: "product", description: "Kit de mejores sorbos" },
+                        { name: "Bestseller Bundle", type: "product", description: "Paquete más vendido" },
+                        { name: "Bottle Bundle", type: "product", description: "Paquete de botellas" },
+                        { name: "Spritz Variety Pack", type: "product", description: "Pack variado de Spritz" },
+                        { name: "Spritz Set", type: "product", description: "Set de Spritz" },
+                        { name: "Original Set", type: "product", description: "Set Original" },
+                        { name: "Party Pack", type: "product", description: "Paquete para fiestas" },
+                        { name: "Cocktail Box", type: "product", description: "Caja de cócteles con Aperitif" },
+                        { name: "Zesty Spritz Pack", type: "product", description: "Pack cítrico" },
+                        { name: "Spiced Spritz Pack", type: "product", description: "Pack especiado" },
+                        { name: "Golden Hour Pack", type: "product", description: "Pack Golden Hour" },
+                        { name: "Grand Voyage Pack", type: "product", description: "Pack Gran Viaje" },
+                        { name: "Riviera Pack", type: "product", description: "Pack Riviera" },
+                        { name: "Match Day Kit", type: "product", description: "Kit para día de partido" },
+                        { name: "Le Pill Combo", type: "product", description: "Combo Le Pill" }
+                    ]
+                },
+                {
+                    name: "OBJETOS",
+                    type: "category",
+                    color: "#2c3e50",
+                    description: "Merchandising y accesorios",
+                    children: [
+                        { name: "Gift Card", type: "product", description: "Tarjeta de regalo" },
+                        { name: "Vide-Poche", type: "product", description: "Bandeja/bowls" },
+                        { name: "Le Pill", type: "product", description: "Le Pill by Ghia x Coming Soon NY" },
+                        { name: "Hair Clip", type: "product", description: "Ciao Ghia Hair Clip" },
+                        { name: "Game Night Pack", type: "product", description: "Pack noche de juegos" },
+                        { name: "Vice & Nice Set", type: "product", description: "Set Vice & Nice" },
+                        { name: "Ghia Jersey", type: "product", description: "Jersey de Ghia" },
+                        { name: "Totem Glasses", type: "product", description: "Vasos Totem" },
+                        { name: "Over The Influence Tee", type: "product", description: "Camiseta Over The Influence" },
+                        { name: "Spritz Tumbler", type: "product", description: "Vaso Spritz" },
+                        { name: "Bottle Opener", type: "product", description: "Monsieur Fizz Abridor" },
+                        { name: "Puzzles", type: "product", description: "Rompecabezas" },
+                        { name: "H2O Bottle", type: "product", description: "L'eau H2O Botella" },
+                        { name: "Ice Bucket", type: "product", description: "Hielera" }
+                    ]
+                }
+            ]
+        };
+
+        const width = window.innerWidth;
+        const height = window.innerHeight;
+        const centerX = width / 2;
+        const centerY = height / 2;
+
+        const svg = d3.select("#container")
+            .append("svg")
+            .attr("width", width)
+            .attr("height", height);
+
+        const tooltip = d3.select("#tooltip");
+        const backButton = d3.select("#backButton");
+        const legend = d3.select("#legend");
+
+        // Grupos principales
+        const mainGroup = svg.append("g");
+        const linksGroup = mainGroup.append("g").attr("class", "links");
+        const nodesGroup = mainGroup.append("g").attr("class", "nodes");
+
+        // Configuración de radios (vista normal)
+        const normalConfig = {
+            centerRadius: 55,
+            categoryRadius: 45,
+            productRadius: 32,
+            categoryDistance: 200,
+            productDistance: 95
+        };
+
+        // Configuración de radios (vista zoom)
+        const zoomConfig = {
+            categoryRadius: 80,
+            productRadius: 55,
+            productDistance: 220
+        };
+
+        let currentState = 'normal'; // 'normal' o 'zoom'
+        let selectedCategory = null;
+
+        // Calcular posiciones iniciales
+        function calculatePositions(config, centerCategory = null) {
+            const positions = {
+                center: { x: 0, y: 0 },
+                categories: [],
+                products: []
+            };
+
+            if (currentState === 'normal') {
+                // Vista normal: 5 categorías en círculo
+                const angleStep = (2 * Math.PI) / data.children.length;
+                
+                data.children.forEach((category, i) => {
+                    const angle = i * angleStep - Math.PI / 2;
+                    const catX = Math.cos(angle) * config.categoryDistance;
+                    const catY = Math.sin(angle) * config.categoryDistance;
+                    
+                    positions.categories.push({
+                        data: category,
+                        x: catX,
+                        y: catY,
+                        index: i
+                    });
+
+                    // Productos en círculo alrededor de categoría
+                    const productAngleStep = (2 * Math.PI) / category.children.length;
+                    category.children.forEach((product, j) => {
+                        const prodAngle = j * productAngleStep;
+                        positions.products.push({
+                            data: product,
+                            x: catX + Math.cos(prodAngle) * config.productDistance,
+                            y: catY + Math.sin(prodAngle) * config.productDistance,
+                            categoryIndex: i,
+                            parentX: catX,
+                            parentY: catY
+                        });
+                    });
+                });
+            } else {
+                // Vista zoom: categoría seleccionada en centro, productos alrededor
+                const selectedCatData = data.children[selectedCategory];
+                
+                // Categoría en el centro
+                positions.categories.push({
+                    data: selectedCatData,
+                    x: 0,
+                    y: 0,
+                    index: selectedCategory,
+                    isCenter: true
+                });
+
+                // Productos distribuidos en círculo grande
+                const productAngleStep = (2 * Math.PI) / selectedCatData.children.length;
+                selectedCatData.children.forEach((product, j) => {
+                    const prodAngle = j * productAngleStep - Math.PI / 2;
+                    positions.products.push({
+                        data: product,
+                        x: Math.cos(prodAngle) * config.productDistance,
+                        y: Math.sin(prodAngle) * config.productDistance,
+                        categoryIndex: selectedCategory,
+                        parentX: 0,
+                        parentY: 0
+                    });
+                });
+
+                // Otras categorías ocultas (fuera de pantalla o pequeñas)
+                data.children.forEach((category, i) => {
+                    if (i !== selectedCategory) {
+                        positions.categories.push({
+                            data: category,
+                            x: 0,
+                            y: 0,
+                            index: i,
+                            hidden: true
+                        });
+                    }
+                });
+            }
+
+            return positions;
+        }
+
+        function render() {
+            const config = currentState === 'normal' ? normalConfig : zoomConfig;
+            const positions = calculatePositions(config);
+
+            // Limpiar y redibujar links
+            linksGroup.selectAll("*").remove();
+
+            if (currentState === 'normal') {
+                // Links centro-categorías
+                positions.categories.forEach(cat => {
+                    linksGroup.append("path")
+                        .attr("class", "link")
+                        .attr("d", `M0,0 L${cat.x},${cat.y}`);
+                });
+            }
+
+            // Links categoría-productos
+            positions.products.forEach(prod => {
+                linksGroup.append("path")
+                    .attr("class", "link")
+                    .attr("d", `M${prod.parentX},${prod.parentY} L${prod.x},${prod.y}`);
+            });
+
+            // Dibujar productos
+            const products = nodesGroup.selectAll(".product-node")
+                .data(positions.products, d => d.data.name);
+
+            products.exit()
+                .transition()
+                .duration(500)
+                .attr("opacity", 0)
+                .remove();
+
+            const productsEnter = products.enter()
+                .append("g")
+                .attr("class", "node product-node")
+                .attr("opacity", 0);
+
+            productsEnter.append("circle")
+                .attr("r", 0)
+                .attr("fill", d => {
+                    const parent = data.children[d.categoryIndex];
+                    return d3.color(parent.color).brighter(0.4);
+                })
+                .attr("stroke", "white")
+                .attr("stroke-width", 2);
+
+            productsEnter.append("text")
+                .attr("class", "product-text")
+                .attr("dy", 0)
+                .text(d => d.data.name);
+
+            const productsUpdate = products.merge(productsEnter);
+
+            productsUpdate.transition()
+                .duration(750)
+                .ease(d3.easeCubicOut)
+                .attr("transform", d => `translate(${d.x}, ${d.y})`)
+                .attr("opacity", 1);
+
+            productsUpdate.select("circle")
+                .transition()
+                .duration(750)
+                .attr("r", config.productRadius);
+
+            productsUpdate.select("text")
+                .call(wrap, config.productRadius * 1.6);
+
+            productsUpdate
+                .on("mouseover", function(event, d) {
+                    const parent = data.children[d.categoryIndex];
+                    tooltip.style("opacity", 1)
+                        .html(`<strong>${d.data.name}</strong><br/>${d.data.description}<br/><em>${parent.name}</em>`)
+                        .style("left", (event.pageX + 10) + "px")
+                        .style("top", (event.pageY - 10) + "px");
+                    d3.select(this).select("circle")
+                        .transition()
+                        .attr("r", config.productRadius + 5);
+                })
+                .on("mouseout", function() {
+                    tooltip.style("opacity", 0);
+                    d3.select(this).select("circle")
+                        .transition()
+                        .attr("r", config.productRadius);
+                });
+
+            // Dibujar categorías
+            const categories = nodesGroup.selectAll(".category-node")
+                .data(positions.categories.filter(c => !c.hidden), d => d.data.name);
+
+            categories.exit()
+                .transition()
+                .duration(500)
+                .attr("opacity", 0)
+                .remove();
+
+            const categoriesEnter = categories.enter()
+                .append("g")
+                .attr("class", "node category-node")
+                .attr("opacity", 0);
+
+            categoriesEnter.append("circle")
+                .attr("r", 0)
+                .attr("fill", d => d.data.color)
+                .attr("stroke", "white")
+                .attr("stroke-width", 3);
+
+            categoriesEnter.append("text")
+                .attr("class", "category-text")
+                .attr("dy", 0)
+                .text(d => d.data.name);
+
+            const categoriesUpdate = categories.merge(categoriesEnter);
+
+            categoriesUpdate.transition()
+                .duration(750)
+                .ease(d3.easeCubicOut)
+                .attr("transform", d => `translate(${d.x}, ${d.y})`)
+                .attr("opacity", 1);
+
+            categoriesUpdate.select("circle")
+                .transition()
+                .duration(750)
+                .attr("r", d => d.isCenter ? config.categoryRadius : normalConfig.categoryRadius);
+
+            categoriesUpdate.select("text")
+                .attr("font-size", d => d.isCenter ? "14px" : "10px");
+
+            categoriesUpdate
+                .on("mouseover", function(event, d) {
+                    if (currentState === 'normal') {
+                        tooltip.style("opacity", 1)
+                            .html(`<strong>${d.data.name}</strong><br/>${d.data.description}<br/>${d.data.children.length} productos<br/><em>Click para expandir</em>`)
+                            .style("left", (event.pageX + 10) + "px")
+                            .style("top", (event.pageY - 10) + "px");
+                        d3.select(this).select("circle")
+                            .transition()
+                            .attr("r", normalConfig.categoryRadius + 5);
+                    }
+                })
+                .on("mouseout", function() {
+                    tooltip.style("opacity", 0);
+                    if (currentState === 'normal') {
+                        d3.select(this).select("circle")
+                            .transition()
+                            .attr("r", normalConfig.categoryRadius);
+                    }
+                })
+                .on("click", function(event, d) {
+                    if (currentState === 'normal') {
+                        zoomToCategory(d.index);
+                    }
+                });
+
+            // Dibujar nodo central (solo en vista normal)
+            if (currentState === 'normal') {
+                let centerNode = nodesGroup.selectAll(".center-node").data([data]);
+                
+                const centerEnter = centerNode.enter()
+                    .append("g")
+                    .attr("class", "node center-node")
+                    .attr("transform", "translate(0,0)");
+
+                centerEnter.append("circle")
+                    .attr("r", normalConfig.centerRadius)
+                    .attr("fill", "#2c3e50")
+                    .attr("stroke", "white")
+                    .attr("stroke-width", 4);
+
+                centerEnter.append("text")
+                    .attr("class", "center-text")
+                    .attr("dy", -5)
+                    .text("GHIA");
+
+                centerEnter.append("text")
+                    .attr("class", "center-text")
+                    .attr("dy", 12)
+                    .style("font-size", "9px")
+                    .style("font-weight", "400")
+                    .text("DRINK");
+
+                centerNode.transition()
+                    .duration(500)
+                    .attr("opacity", 1);
+            } else {
+                nodesGroup.selectAll(".center-node")
+                    .transition()
+                    .duration(500)
+                    .attr("opacity", 0)
+                    .remove();
+            }
+        }
+
+        function zoomToCategory(index) {
+            currentState = 'zoom';
+            selectedCategory = index;
+            
+            // Mostrar botón de volver
+            backButton.classed("visible", true);
+            
+            // Ocultar leyenda
+            legend.classed("hidden", true);
+            
+            // Actualizar título
+            d3.select(".title").text(`Categoría: ${data.children[index].name}`);
+            d3.select(".subtitle").text(`${data.children[index].children.length} productos disponibles`);
+            
+            render();
+        }
+
+        function resetZoom() {
+            currentState = 'normal';
+            selectedCategory = null;
+            
+            // Ocultar botón
+            backButton.classed("visible", false);
+            
+            // Mostrar leyenda
+            legend.classed("hidden", false);
+            
+            // Restaurar título
+            d3.select(".title").text("Mapa de Productos");
+            d3.select(".subtitle").text("Ghia • Bebidas Sin Alcohol & Lifestyle");
+            
+            render();
+        }
+
+        // Función para ajustar texto
+        function wrap(text, width) {
+            text.each(function() {
+                const text = d3.select(this);
+                const words = text.text().split(/\s+/).reverse();
+                let word;
+                let line = [];
+                let lineNumber = 0;
+                const lineHeight = 1.1;
+                const y = text.attr("y");
+                const dy = parseFloat(text.attr("dy")) || 0;
+                let tspan = text.text(null).append("tspan").attr("x", 0).attr("y", y).attr("dy", dy + "em");
+                
+                while (word = words.pop()) {
+                    line.push(word);
+                    tspan.text(line.join(" "));
+                    if (tspan.node().getComputedTextLength() > width) {
+                        line.pop();
+                        tspan.text(line.join(" "));
+                        line = [word];
+                        tspan = text.append("tspan").attr("x", 0).attr("y", y).attr("dy", ++lineNumber * lineHeight + dy + "em").text(word);
+                    }
+                }
+            });
+        }
+
+        // Centrar el grupo principal
+        mainGroup.attr("transform", `translate(${centerX}, ${centerY})`);
+
+        // Render inicial
+        render();
+
+        // Animación de entrada
+        mainGroup.style("opacity", 0)
+            .transition()
+            .duration(1000)
+            .style("opacity", 1);
+
+        // Responsive
+        window.addEventListener('resize', () => {
+            location.reload();
+        });
+    </script>
+</body>
+</html>
